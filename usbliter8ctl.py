@@ -4,14 +4,20 @@ import argparse
 from pathlib import Path
 import usb
 import struct
+import re
 
 DFU_DNLOAD      = 1
 DFU_ABORT       = 4
 CUSTOM_DEMOTE   = 7
 CUSTOM_BOOT     = 8
 CUSTOM_ARB_CALL = 9
-    
+
+AES_CRYPTO_CMD = 0
+INSECURE_MEMORY_BASE = 0
+
 def open_device():
+    global AES_CRYPTO_CMD, INSECURE_MEMORY_BASE
+
     dev = usb.core.find(idProduct=0x1227)
 
     if not dev:
@@ -21,6 +27,22 @@ def open_device():
 
     if "PWND:[" not in srnm:
         raise RuntimeError("this is not Pwned DFU device")
+        
+    match = re.search(r'CPID:([0-9A-Fa-f]+)', srnm)
+    if match:
+        CPID = match.group(1)
+        if CPID == "8020":
+            print("A12")
+            AES_CRYPTO_CMD = 0x100009BE8
+            INSECURE_MEMORY_BASE = 0x19C028C00
+        elif CPID == "8030":
+            print("A13")
+            AES_CRYPTO_CMD = 0x10000a47c
+            INSECURE_MEMORY_BASE = 0x19C028A80
+        else:
+            print(f"device with CPID {CPID} is not supported")
+    else:
+        raise RuntimeError("unable to get ECID")
 
     return dev
 
@@ -46,15 +68,6 @@ def download(dev, buf):
 
 def decrypt_kbag(kbag):
     dev = open_device();
-    
-    # for t8030 (A13)
-    AES_CRYPTO_CMD = 0x10000a47c
-    INSECURE_MEMORY_BASE = 0x19C028A80
-    
-#    # for t8020 (A12)
-#    AES_CRYPTO_CMD = 0x100009BE8
-#    INSECURE_MEMORY_BASE = 0x19C028C00
-    
     registers = [
         AES_CRYPTO_CMD,            # pc
         0,                         # ret
@@ -78,9 +91,11 @@ def decrypt_kbag(kbag):
     
 # usbliter8ctl.py decrypt_kbag "0C0F5C44CBFE489467322D9CCA0965DF1EE00476AE5CDF9921B56A96399D7F1430614374D9FD8F3B5A48924B4E51EA44"
 # usbliter8ctl.py decrypt_kbag "48E3656225569E1FDAC449550F8F2900BAA9D8E588085BC66B8E849A20B8A5D4EE5F52109D2F7A3BC68BC49D26A1D2A3"
+
+# usbliter8ctl.py decrypt_kbag "D17E41D63A0DEC1A25C5795774C5BC896E8F22EC0CFC7C83A07424F48D8560619A649FF8B5653E4F5219CCAC3D0AB574"
+# usbliter8ctl.py decrypt_kbag "08C850CAA3BACDFB3A327647DC15C9071229BC07808F9333B4257C3EE835A3AD75752017A6069DD428629C3A517E397E"
 def do_decrypt_kbag(args):
     kbag = bytearray.fromhex(args.kbag)
-
     if len(kbag) == 48:
         decrypt_kbag(kbag)
     else:

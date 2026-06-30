@@ -46,9 +46,15 @@ def download(dev, buf):
 
 def decrypt_kbag(kbag):
     dev = open_device();
-    # for t8020 (A12)
-    AES_CRYPTO_CMD = 0x100009BE8
-    INSECURE_MEMORY_BASE = 0x19C028C00
+    
+    # for t8030 (A13)
+    AES_CRYPTO_CMD = 0x10000a47c
+    INSECURE_MEMORY_BASE = 0x19C028A80
+    
+#    # for t8020 (A12)
+#    AES_CRYPTO_CMD = 0x100009BE8
+#    INSECURE_MEMORY_BASE = 0x19C028C00
+    
     registers = [
         AES_CRYPTO_CMD,            # pc
         0,                         # ret

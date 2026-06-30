@@ -25,12 +25,17 @@ enum {
     DFU_GETSTATE,
     DFU_ABORT,
     CUSTOM_DEMOTE,
-    CUSTOM_BOOT
+    CUSTOM_BOOT,
+    CUSTOM_ARB_CALL
 };
 
 static int  (*orig_handle_usb_req)(struct usb_device_request *request, uint8_t **io_buffer) = (void *)HANDLE_USB_REQ;
 static void (*platform_demote)() = (void *)PLATFORM_DEMOTE;
 static void (*platform_set_remote_boot)() = (void *)PLATFORM_SET_REMOTE_BOOT;
+
+#ifdef USB_CORE_DO_TRANSFER
+static void (*usb_core_do_transfer)(uint32_t endpoint, void *io_buffer, uint32_t io_length, void *callback) = (void*)USB_CORE_DO_TRANSFER;
+#endif
 
 #if WITH_PAC
 
@@ -45,33 +50,23 @@ uint64_t PACIB(uint64_t ptr, uint64_t ctx) {
 int custom_handle_usb_req(struct usb_device_request *request, uint8_t **io_buffer) {
     uint8_t bmRequestType = request->bmRequestType;
     uint8_t bRequest      = request->bRequest;
-
-    if ((bmRequestType & USB_DIRECTION_MASK) == USB_HOST2DEVICE) {
+    
+#if defined(USB_CORE_DO_TRANSFER) && defined(INSECURE_MEMORY_BASE)
+    if ((bmRequestType & USB_DIRECTION_MASK) == USB_DEVICE2HOST) {
         switch (bRequest) {
-            case CUSTOM_DEMOTE: {
-                platform_demote();
-                return 0;
-            }
-
-            case CUSTOM_BOOT: {
-                platform_set_remote_boot();
-
-                uint64_t ptr = -1;
-#if WITH_PAC
-                ptr = PACIB(JUMP_AWAY, MAIN_TASK_STACK_LR + 8);
-#else
-                ptr = JUMP_AWAY;
-#endif
-
-                *(volatile uint64_t *)MAIN_TASK_STACK_LR = ptr;
+            // doesn't like to work with the other handlers that's why they're gone.
+            case CUSTOM_ARB_CALL: {
+                uint64_t* payload = (void*)INSECURE_MEMORY_BASE;
+                uint64_t (*func)(uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7) = 0;
+                func = (void*)payload[0];
+                uint64_t ret = func(payload[2], payload[3], payload[4], payload[5], payload[6], payload[7], payload[8], payload[9]);
+                payload[1] = ret;
+                usb_core_do_transfer(0x80, payload, request->wLength, 0);
                 return 0;
             }
         }
-
-    } else if ((bmRequestType & USB_DIRECTION_MASK) == USB_DEVICE2HOST) {
-        /* KBAG decryption folks? */
     }
-
+#endif
     /* everything that doesn't fall under the conditions above goes to the original handler */
     return orig_handle_usb_req(request, io_buffer);
 }

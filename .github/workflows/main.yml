@@ -35,9 +35,10 @@ jobs:
     - name: Build USB Request Handlers
       run: |
         cd usb_req_handler
-        export TARGET=t8030 && ./make.sh
-        export TARGET=t8020 && ./make.sh
-        export TARGET=t8006 && ./make.sh
+        ls
+        export TARGET=t8030 && bash make.sh
+        export TARGET=t8020 && bash make.sh
+        export TARGET=t8006 && bash make.sh
         
     - name: Build Firmware
       run: |

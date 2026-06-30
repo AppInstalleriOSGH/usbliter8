@@ -62,25 +62,32 @@ def decrypt_kbag(kbag):
         0,                         # x7
     ]
     registers_bytes = struct.pack('<10Q', *registers)
-    payload = registers_bytes + bytes(kbag)
+    payload = registers_bytes + kbag
     download(dev, payload)
     response = bytes(dev.ctrl_transfer(0xA1, CUSTOM_ARB_CALL, 0, 0, 80 + 48, 10000)[-48:]) # perform arbitrary call and return 80 + 48 bytes from insecure_memory_base
     iv = response[:16].hex()
     key = response[16:].hex()
     print(f"IV:  {iv}")
     print(f"KEY: {key}")
+    
+# usbliter8ctl.py decrypt_kbag "0C0F5C44CBFE489467322D9CCA0965DF1EE00476AE5CDF9921B56A96399D7F1430614374D9FD8F3B5A48924B4E51EA44"
+# usbliter8ctl.py decrypt_kbag "48E3656225569E1FDAC449550F8F2900BAA9D8E588085BC66B8E849A20B8A5D4EE5F52109D2F7A3BC68BC49D26A1D2A3"
+def do_decrypt_kbag(args):
+    kbag = bytearray.fromhex(args.kbag)
 
-def do_decrypt_kbag_test(args):
-    decrypt_kbag([0xc,0xf,0x5c,0x44,0xcb,0xfe,0x48,0x94,0x67,0x32,0x2d,0x9c,0xca,0x9,0x65,0xdf,0x1e,0xe0,0x4,0x76,0xae,0x5c,0xdf,0x99,0x21,0xb5,0x6a,0x96,0x39,0x9d,0x7f,0x14,0x30,0x61,0x43,0x74,0xd9,0xfd,0x8f,0x3b,0x5a,0x48,0x92,0x4b,0x4e,0x51,0xea,0x44])
-    decrypt_kbag([0x48,0xe3,0x65,0x62,0x25,0x56,0x9e,0x1f,0xda,0xc4,0x49,0x55,0xf,0x8f,0x29,0x0,0xba,0xa9,0xd8,0xe5,0x88,0x8,0x5b,0xc6,0x6b,0x8e,0x84,0x9a,0x20,0xb8,0xa5,0xd4,0xee,0x5f,0x52,0x10,0x9d,0x2f,0x7a,0x3b,0xc6,0x8b,0xc4,0x9d,0x26,0xa1,0xd2,0xa3])
+    if len(kbag) == 48:
+        decrypt_kbag(kbag)
+    else:
+        print(f"Error: Expected 48 bytes, but got {len(kbag)} bytes.")
 
 def main():
     parser = argparse.ArgumentParser(description="Love is Control")
 
     subparsers = parser.add_subparsers()
 
-    test_parser = subparsers.add_parser("test", help="decrypt kbag test")
-    test_parser.set_defaults(func=do_decrypt_kbag_test)
+    decrypt_kbag_parser = subparsers.add_parser("decrypt_kbag", help="decrypt kbag")
+    decrypt_kbag_parser.set_defaults(func=do_decrypt_kbag)
+    decrypt_kbag_parser.add_argument("kbag", type=str)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):
